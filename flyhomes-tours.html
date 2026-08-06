@@ -1025,7 +1025,7 @@ function updateBeforeSendState(){
   booked=ready;
   $("#btn-send").disabled=!ready||itinerarySent;
   if(statusUserSet||itinerarySent){
-    setReqStatus(reqStatus,{selectable:true});
+    setReqStatus(reqStatus);
     if(itinerarySent&&reqStatus!=="Unscheduled"){
       $("#ab-text").textContent="Itinerary sent to Richard Frank and copied to Melinda Liu.";
     }else if(reqStatus==="Unscheduled"){
@@ -1036,10 +1036,10 @@ function updateBeforeSendState(){
     return;
   }
   if(ready){
-    setReqStatus("Scheduled",{selectable:false});
+    setReqStatus("Scheduled");
     $("#ab-text").textContent="All homes are confirmed. Send the itinerary to the client.";
   }else{
-    setReqStatus("Unscheduled",{selectable:false});
+    setReqStatus("Unscheduled");
     $("#ab-text").textContent="Add a showing date, time, and tour agent on each home before sending.";
   }
 }
@@ -1322,7 +1322,9 @@ $("#btn-tour-more").onclick=function(e){
 $("#btn-tour-edit").onclick=function(e){e.stopPropagation();closeMenus();openTourModal()};
 $("#btn-tour-cancel").onclick=function(e){
   e.stopPropagation();closeMenus();
-  setReqStatus("Canceled",{selectable:expMode==="before"});
+  statusUserSet=true;
+  setReqStatus("Canceled");
+  syncDetailTourStatus("Canceled");
   toast("Tour request canceled");
 };
 $("#tr-close").onclick=closeTourModal;
@@ -1473,44 +1475,67 @@ var STATUS_CHIP={
   "Completed":{cls:"chip-completed",icon:"#s-check"},
   "Canceled":{cls:"chip-canceled",icon:"#s-x"}
 };
-function setReqStatus(status,opts){
-  opts=opts||{};
+function statusOptionsForMode(){
+  return expMode==="before"
+    ?["Unscheduled","Scheduled","In Progress","Completed","Canceled"]
+    :["Unscheduled","Scheduled","Awaiting client","Completed","Canceled"];
+}
+function syncStatusMenu(){
+  var menu=$("#req-status-menu");
+  menu.innerHTML=statusOptionsForMode().map(function(st){
+    return'<button type="button" role="option" data-status="'+st+'">'+st+'</button>';
+  }).join("");
+  $$("#req-status-menu [data-status]").forEach(function(b){
+    b.onclick=function(e){
+      e.stopPropagation();
+      applyManualStatus(b.dataset.status);
+    };
+  });
+}
+function syncDetailTourStatus(status){
+  var t=detailTour();
+  if(t)t.status=status;
+  renderQueue();
+}
+function applyManualStatus(st){
+  statusUserSet=true;
+  if(st==="Unscheduled"){
+    itinerarySent=false;
+  }else if(st==="Scheduled"||st==="In Progress"||st==="Completed"||st==="Awaiting client"){
+    // Keep send available after a manual schedule mark when homes are ready (before)
+    if(expMode==="before"&&allHomesConfirmed())itinerarySent=itinerarySent||false;
+  }
+  setReqStatus(st);
+  syncDetailTourStatus(st);
+  if(expMode==="before")updateBeforeSendState();
+  else{
+    if(st==="Unscheduled")$("#ab-text").textContent="Confirm the booking before sending the itinerary.";
+    else if(st==="Scheduled"||st==="Awaiting client")$("#ab-text").textContent="Tour request is "+st+". Send the itinerary when ready.";
+    else $("#ab-text").textContent="Tour request is "+st+".";
+    if(st==="Scheduled"||st==="Awaiting client")$("#btn-send").disabled=false;
+  }
+  addEvent("Status updated","Tour request marked "+st,"06/16/22, 2:12 PM");
+  toast("Status set to "+st);
+}
+function setReqStatus(status){
   reqStatus=status;
   var meta=STATUS_CHIP[status]||STATUS_CHIP.Unscheduled;
   var btn=$("#req-status");
-  var selectable=expMode==="before"&&!!opts.selectable;
-  btn.className="chip status-dd-btn "+meta.cls+(selectable?" is-select":"");
+  btn.className="chip status-dd-btn is-select "+meta.cls;
   btn.setAttribute("aria-expanded","false");
   $("#req-status-label").innerHTML=(meta.icon?'<svg aria-hidden="true" style="width:13px;height:13px;vertical-align:-2px;margin-right:2px"><use href="'+meta.icon+'"/></svg>':'')+status;
   $$("#req-status-menu [data-status]").forEach(function(b){b.setAttribute("aria-checked",String(b.dataset.status===status))});
   $("#req-status-menu").classList.remove("open");
 }
-function setReqScheduled(){setReqStatus("Scheduled",{selectable:expMode==="before"&&itinerarySent})}
+function setReqScheduled(){setReqStatus("Scheduled");syncDetailTourStatus("Scheduled")}
 function closeStatusMenu(){$("#req-status-menu").classList.remove("open");$("#req-status").setAttribute("aria-expanded","false")}
 $("#req-status").onclick=function(e){
   e.stopPropagation();
-  if(!$("#req-status").classList.contains("is-select"))return;
   var menu=$("#req-status-menu");
   var open=menu.classList.contains("open");
-  closeMenus();closeStatusMenu();
+  closeMenus();closeAssignMenu();closeStatusMenu();
   if(!open){menu.classList.add("open");$("#req-status").setAttribute("aria-expanded","true")}
 };
-$$("#req-status-menu [data-status]").forEach(function(b){
-  b.onclick=function(e){
-    e.stopPropagation();
-    var st=b.dataset.status;
-    statusUserSet=true;
-    if(st==="Unscheduled"){
-      itinerarySent=false;
-    }else if(st==="Scheduled"||st==="In Progress"||st==="Completed"){
-      itinerarySent=true;
-    }
-    setReqStatus(st,{selectable:true});
-    updateBeforeSendState();
-    addEvent("Status updated","Tour request marked "+st,"06/16/22, 2:12 PM");
-    toast("Status set to "+st);
-  };
-});
 document.addEventListener("click",function(){closeStatusMenu()});
 
 function applyBookingToHomes(){
@@ -1548,13 +1573,10 @@ function confirmBooking(){
 
 function markItinerarySent(){
   itinerarySent=true;
-  if(expMode==="before"){
-    statusUserSet=true;
-    setReqStatus("Scheduled",{selectable:true});
-  }else{
-    statusUserSet=false;
-    setReqStatus("Awaiting client",{selectable:false});
-  }
+  statusUserSet=true;
+  if(expMode==="before")setReqStatus("Scheduled");
+  else setReqStatus("Awaiting client");
+  syncDetailTourStatus(reqStatus);
   $("#ab-text").textContent="Itinerary sent to Richard Frank and copied to Melinda Liu.";
   $("#btn-send").disabled=true;
   addEvent("Itinerary sent to client","Emailed to Richard Frank, copied to Melinda Liu","06/16/22, 1:44 PM",null,"success");
@@ -1712,7 +1734,9 @@ function resetExperience(opts){
   qstate={view:expMode==="before"?"all":"unscheduled",assignee:"all",q:"",sort:"received",page:1,per:12};
   $("#q").value="";$("#sort").value="received";$("#assignee-filter").value="all";
   syncViewSelect();
-  setReqStatus("Unscheduled",{selectable:false});
+  syncStatusMenu();
+  setReqStatus("Unscheduled");
+  syncDetailTourStatus("Unscheduled");
   $("#req-for").textContent="Requested for Saturday, June 18, 2022";
   $("#btn-send").disabled=true;
   $("#ab-text").textContent=expMode==="before"?"Add a showing date, time, and tour agent on each home before sending.":"Confirm the booking before sending the itinerary.";
