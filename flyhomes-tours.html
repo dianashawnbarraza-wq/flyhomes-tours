@@ -1383,7 +1383,15 @@ function openModal(sc){
   $("#bm-next").textContent="Next";
   $("#bm-next").disabled=false;
 }
-function closeModal(){clearRunTimers();$("#book-modal").hidden=true}
+function closeModal(){
+  clearRunTimers();
+  $("#book-modal").hidden=true;
+  // After a successful schedule/send, always land on Scheduled (never Awaiting client)
+  if(booked||itinerarySent){
+    statusUserSet=true;
+    setReqScheduled();
+  }
+}
 function setMS(n){[1,2,3,4].forEach(function(i){var el=$("#ms"+i);if(!el)return;el.className="mini-step"+(i<n?" done":i===n?" active":"");var num=el.querySelector(".n");num.innerHTML=i<n?'<svg aria-hidden="true"><use href="#s-check"/></svg>':String(i)})}
 $("#btn-book").onclick=function(){openModal("success")};
 $("#bm-close").onclick=closeModal;
@@ -1474,12 +1482,12 @@ function showReview(){
         var drive=(i>0?'<div class="prow-drive"><svg aria-hidden="true"><use href="#s-car"/></svg>'+p.mi+' mi · '+p.drive+' min drive</div>':'');
         if(p.ok)return drive+prowHtml(p,i);
         var slotsHtml=conflictAlts.map(function(alt,ai){
-          return'<button type="button" class="cb-slot" data-alt="'+ai+'" aria-pressed="false">'+fmtTime(alt.time)+'</button>';
+          return'<button type="button" class="cb-slot" data-alt="'+ai+'" aria-pressed="false">'+fmtMD(alt.date)+' · '+fmtTime(alt.time)+'</button>';
         }).join("");
         var calVal=toDatetimeLocal(firstAlt.date,firstAlt.time);
         return drive+'<div class="prow" id="conflict-prow"><div class="prow-top"><span class="prow-no">'+(i+1)+'</span><span class="prow-addr">'+p.addr+'</span><span style="font-size:12px;color:var(--text-3)">'+p.area+'</span><span class="prow-right"><span class="chip chip-conflict chip-sm"><svg aria-hidden="true"><use href="#s-alert"/></svg>Conflict</span></span></div>'+
         '<div class="conflict-block"><div class="cb-head"><svg aria-hidden="true"><use href="#s-alert"/></svg><div><b>Requested window is unavailable</b><br><span style="font-size:12px;color:var(--text-2)">Choose a next available start time, or pick another with the calendar.</span></div></div>'+
-        '<div class="cb-compare"><div class="cb-col"><div class="cb-label">Requested</div><div class="cb-val old">'+fmtTime(p.time)+'</div></div><div class="cb-col"><div class="cb-label">Earliest available</div><div class="cb-val new">'+fmtTime(firstAlt.time)+'</div></div></div>'+
+        '<div class="cb-compare"><div class="cb-col"><div class="cb-label">Requested</div><div class="cb-val old">'+fmtTime(p.time)+'</div></div><div class="cb-col"><div class="cb-label">Earliest available</div><div class="cb-val new">'+fmtMD(firstAlt.date)+' · '+fmtTime(firstAlt.time)+'</div></div></div>'+
         '<div class="cb-slots"><div class="cb-slots-label">Next available</div><div class="cb-slot-list">'+slotsHtml+
           '<label class="cb-slot cb-slot-cal" title="Pick another time" aria-label="Pick another time">'+
             '<svg aria-hidden="true"><use href="#s-calendar"/></svg>'+
@@ -1668,8 +1676,10 @@ function confirmBooking(){
 
 function markItinerarySent(){
   itinerarySent=true;
+  booked=true;
   statusUserSet=true;
-  setReqScheduled();
+  setReqStatus("Scheduled");
+  syncDetailTourStatus("Scheduled");
   $("#ab-text").textContent="Itinerary sent to Richard Frank and copied to Melinda Liu.";
   $("#btn-send").disabled=true;
   addEvent("Itinerary sent to client","Emailed to Richard Frank, copied to Melinda Liu","06/16/22, 1:44 PM",null,"success");
@@ -1844,7 +1854,10 @@ function showScreen(s){
   $("#screen-queue").hidden=s!=="queue";
   $("#screen-detail").hidden=s!=="detail";
   $$(".demobar button").forEach(function(b){b.classList.toggle("active",b.dataset.scene===s)});
-  if(s==="detail")renderOpsAgent();
+  if(s==="detail"){
+    if(booked||itinerarySent){statusUserSet=true;setReqScheduled()}
+    renderOpsAgent();
+  }
   if(s==="queue"||s==="detail")window.scrollTo(0,0)
 }
 $$("[data-back]").forEach(function(a){a.onclick=function(e){e.preventDefault();showScreen("queue")}});
