@@ -448,12 +448,32 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
 .conflict-block .cb-val{font-size:14px;font-weight:500}
 .conflict-block .cb-val.old{text-decoration:line-through;color:var(--text-3)}
 .conflict-block .cb-val.new{color:var(--blue)}
-.conflict-block .cb-actions{display:flex;gap:8px;flex-wrap:wrap}
+.conflict-block .cb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.cb-slots{margin-top:4px}
+.cb-slots-label{font-size:12px;font-weight:500;color:#7C4400;margin-bottom:8px}
+.cb-slot-list{display:flex;flex-wrap:wrap;gap:8px}
+.cb-slot{
+  display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;
+  min-width:132px;padding:10px 12px;border:1px solid var(--amber-line);border-radius:var(--r);
+  background:#fff;cursor:pointer;text-align:left;font:inherit;color:var(--text);
+}
+.cb-slot:hover{border-color:var(--blue);background:var(--blue-soft)}
+.cb-slot[aria-pressed="true"]{border-color:var(--blue);background:var(--blue-soft);box-shadow:inset 0 0 0 1px var(--blue)}
+.cb-slot .cb-slot-day{font-size:13px;font-weight:500}
+.cb-slot .cb-slot-time{font-size:12px;color:var(--text-2)}
+.cb-picker{margin-top:14px;padding-top:14px;border-top:1px solid var(--amber-line)}
+.cb-picker-label{font-size:12px;font-weight:500;color:#7C4400;margin-bottom:8px}
+.cb-picker-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.cb-picker-row .field{min-width:140px;flex:1}
+.cb-picker-row .field label{color:#7C4400}
 
 /* toast */
-.toast{position:fixed;left:24px;bottom:24px;background:#323232;color:#fff;border-radius:var(--r);padding:14px 16px;font-size:14px;box-shadow:var(--sh2);display:flex;gap:10px;align-items:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .15s}
-.toast.show{opacity:1}
-.toast svg{width:17px;height:17px;color:#81C995}
+.toast{position:fixed;left:24px;bottom:24px;background:#323232;color:#fff;border-radius:var(--r);padding:14px 16px;font-size:14px;box-shadow:var(--sh2);display:flex;gap:10px;align-items:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .15s;max-width:min(480px,calc(100vw - 48px))}
+.toast.show{opacity:1;pointer-events:auto}
+.toast svg{width:17px;height:17px;color:#81C995;flex:none}
+.toast #toast-text{line-height:1.4}
+.toast #toast-text a{color:#AECBFA;font-weight:500;margin-left:6px;white-space:nowrap}
+.toast #toast-text a:hover{color:#fff;text-decoration:underline}
 
 /* demo bar */
 .demobar{position:fixed;top:62px;right:12px;z-index:80;background:#323232;color:#fff;border-radius:var(--r-lg);padding:6px 8px;display:flex;gap:4px;box-shadow:var(--sh2);font-size:12px}
@@ -706,9 +726,9 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
         <div class="field-row">
           <div class="field"><label for="bm-start">Client requested start time</label><input class="input" id="bm-start" type="time" value="14:00" step="900"></div>
           <div class="field"><label for="bm-len">Window length</label><select class="select" id="bm-len"><option>30 minutes</option><option>45 minutes</option><option>60 minutes</option></select></div>
-          <div class="field"><label for="bm-pool">Specialist pool</label><select class="select" id="bm-pool"><option>Puget Sound</option><option>Eastside</option><option>Any available</option></select></div>
+          <div class="field"><label for="bm-pool">Tour agent region</label><select class="select" id="bm-pool"><option>Puget Sound</option><option>Eastside</option><option>Any available</option></select></div>
+          <div class="field"><label for="bm-optimize">Optimize by drive time</label><select class="select" id="bm-optimize"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
         </div>
-        <label class="check-row"><input type="checkbox" id="bm-optimize" checked> Optimize for driving time</label>
         <div class="sched-copy">
           <h4>Run the scheduler to automatically:</h4>
           <ul>
@@ -1331,7 +1351,7 @@ function driveMin(i){return [30,45,25][i]!=null?[30,45,25][i]:(20+i*10)}
 function toMins(v){var p=v.split(":");return(+p[0])*60+(+p[1])}
 function fromMins(m){m=((m%1440)+1440)%1440;return("0"+Math.floor(m/60)).slice(-2)+":"+("0"+(m%60)).slice(-2)}
 function roundUp15(v){var m=toMins(v),r=Math.ceil(m/15)*15;return fromMins(r)}
-function optimizeOn(){return $("#bm-optimize").checked}
+function optimizeOn(){return $("#bm-optimize").value!=="no"}
 function buildSlots(base){
   var len=winLen(),opt=optimizeOn(),slots=[],t=roundUp15(base||"14:00");
   homes.forEach(function(h,i){
@@ -1389,16 +1409,42 @@ function runAPIs(){
   runTimers.push(setTimeout(function(){showReview()},d*2));
 }
 
+var conflictAlts=[];
+var conflictHomeIndex=-1;
+var selectedConflictAlt=-1;
+
+function addDaysISO(iso,days){
+  var p=String(iso||"2022-06-18").split("-");
+  var d=new Date(+p[0],+p[1]-1,+p[2]);
+  d.setDate(d.getDate()+days);
+  return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);
+}
+function buildConflictAlts(baseDate,baseTime){
+  // Prototype alternatives from ShowingTime after the conflicted window
+  return[
+    {date:baseDate,time:addMin(baseTime,90),label:"Same day"},
+    {date:addDaysISO(baseDate,1),time:"10:00",label:"Tomorrow morning"},
+    {date:addDaysISO(baseDate,1),time:"14:00",label:"Tomorrow afternoon"},
+    {date:addDaysISO(baseDate,2),time:"11:00",label:"Next day"},
+    {date:addDaysISO(baseDate,3),time:"15:30",label:"Later this week"}
+  ];
+}
+
 function showReview(){
   mstep=3;setMS(3);hideBookPanes();$("#bm-review").hidden=false;
   $("#bm-next").disabled=false;
   var t=$("#bm-start").value||"14:00";
   var slots=buildSlots(t);
   var len=winLen();
+  conflictAlts=[];conflictHomeIndex=-1;selectedConflictAlt=-1;
   var prows=homes.map(function(h,i){
     var st=slots[i].time;
     var ok=true,counterTime="";
-    if(scenario==="conflict"&&i===homes.length-1){ok=false;counterTime=addMin(st,90)}
+    if(scenario==="conflict"&&i===homes.length-1){
+      ok=false;counterTime=addMin(st,90);
+      conflictHomeIndex=i;
+      conflictAlts=buildConflictAlts(h.date||tourReq.date||"2022-06-18",st);
+    }
     return{addr:h.addr,area:h.area,time:st,counter:counterTime,ok:ok,listing:h.listing||LISTING_AGENTS[i%LISTING_AGENTS.length],specialist:"Dana Whitfield",drive:slots[i].drive,mi:slots[i].mi}
   });
 
@@ -1413,27 +1459,85 @@ function showReview(){
     }).join("")+'</div>'
   }else{
     $("#bm-next").textContent="Confirm";
+    var firstAlt=conflictAlts[0];
     $("#bm-review").innerHTML=
-      '<div class="callout callout-warn" style="margin-bottom:14px"><svg aria-hidden="true"><use href="#s-alert"/></svg><span><b>1 of '+homes.length+' homes has a scheduling conflict.</b></span></div>'+
+      '<div class="callout callout-warn" style="margin-bottom:14px"><svg aria-hidden="true"><use href="#s-alert"/></svg><span><b>1 of '+homes.length+' homes has a scheduling conflict.</b> Pick another available time below.</span></div>'+
       '<div class="proposal">'+prows.map(function(p,i){
         var drive=(i>0?'<div class="prow-drive"><svg aria-hidden="true"><use href="#s-car"/></svg>'+p.mi+' mi · '+p.drive+' min drive</div>':'');
         if(p.ok)return drive+prowHtml(p,i);
-        var nextDay=fmtMD(homes[i].date||tourReq.date);
-        var nextAt=fmtTime(p.counter).replace(" ","").toLowerCase();
-        return drive+'<div class="prow"><div class="prow-top"><span class="prow-no">'+(i+1)+'</span><span class="prow-addr">'+p.addr+'</span><span style="font-size:12px;color:var(--text-3)">'+p.area+'</span><span class="prow-right"><span class="chip chip-conflict chip-sm"><svg aria-hidden="true"><use href="#s-alert"/></svg>Conflict</span></span></div>'+
-        '<div class="conflict-block"><div class="cb-head"><svg aria-hidden="true"><use href="#s-alert"/></svg><div><b>Listing agent suggested a different time</b><br><span style="font-size:12px;color:var(--text-2)">Next available showing time is '+nextDay+' at '+nextAt+'.</span></div></div>'+
-        '<div class="cb-compare"><div class="cb-col"><div class="cb-label">Requested</div><div class="cb-val old">'+fmtTime(p.time)+' to '+fmtTime(addMin(p.time,len))+'</div></div><div class="cb-col"><div class="cb-label">Suggested by listing agent</div><div class="cb-val new">'+fmtTime(p.counter)+' to '+fmtTime(addMin(p.counter,len))+'</div></div></div>'+
+        var slotsHtml=conflictAlts.map(function(alt,ai){
+          return'<button type="button" class="cb-slot" data-alt="'+ai+'" aria-pressed="false">'+
+            '<span class="cb-slot-day">'+fmtDate(alt.date)+'</span>'+
+            '<span class="cb-slot-time">'+fmtTime(alt.time)+' – '+fmtTime(addMin(alt.time,len))+' · '+alt.label+'</span>'+
+          '</button>';
+        }).join("");
+        return drive+'<div class="prow" id="conflict-prow"><div class="prow-top"><span class="prow-no">'+(i+1)+'</span><span class="prow-addr">'+p.addr+'</span><span style="font-size:12px;color:var(--text-3)">'+p.area+'</span><span class="prow-right"><span class="chip chip-conflict chip-sm"><svg aria-hidden="true"><use href="#s-alert"/></svg>Conflict</span></span></div>'+
+        '<div class="conflict-block"><div class="cb-head"><svg aria-hidden="true"><use href="#s-alert"/></svg><div><b>Requested window is unavailable</b><br><span style="font-size:12px;color:var(--text-2)">Listing agent blocked '+fmtTime(p.time)+'–'+fmtTime(addMin(p.time,len))+'. Choose from the next available times, or pick your own.</span></div></div>'+
+        '<div class="cb-compare"><div class="cb-col"><div class="cb-label">Requested</div><div class="cb-val old">'+fmtTime(p.time)+' to '+fmtTime(addMin(p.time,len))+'</div></div><div class="cb-col"><div class="cb-label">Earliest available</div><div class="cb-val new">'+fmtDate(firstAlt.date)+' · '+fmtTime(firstAlt.time)+'</div></div></div>'+
+        '<div class="cb-slots"><div class="cb-slots-label">Next available times</div><div class="cb-slot-list">'+slotsHtml+'</div></div>'+
+        '<div class="cb-picker"><div class="cb-picker-label">Or pick a date and time</div><div class="cb-picker-row">'+
+          '<div class="field"><label for="cb-date">Date</label><input class="input" id="cb-date" type="date" value="'+(firstAlt?firstAlt.date:"2022-06-18")+'" min="2022-06-18"></div>'+
+          '<div class="field"><label for="cb-time">Start time</label><input class="input" id="cb-time" type="time" value="'+(firstAlt?firstAlt.time:"17:30")+'" step="900"></div>'+
+          '<button type="button" class="btn btn-primary btn-sm" id="cb-apply-custom"><svg aria-hidden="true"><use href="#s-calendar"/></svg>Use this time</button>'+
+        '</div></div>'+
         '<div class="cb-actions"><button class="btn btn-sm" onclick="resolveConflict(\'client\')"><svg aria-hidden="true"><use href="#s-mail"/></svg>Contact client</button><button class="btn btn-sm" onclick="resolveConflict(\'listing\')"><svg aria-hidden="true"><use href="#s-phone"/></svg>Contact listing agent</button><button class="btn btn-sm" onclick="resolveConflict(\'skip\')"><svg aria-hidden="true"><use href="#s-x"/></svg>Skip home</button></div></div></div>'
-      }).join("")+'</div>'
+      }).join("")+'</div>';
+    wireConflictPickers(len);
   }
+}
+
+function wireConflictPickers(len){
+  $$(".cb-slot").forEach(function(btn){
+    btn.onclick=function(){
+      var ai=+btn.getAttribute("data-alt");
+      selectedConflictAlt=ai;
+      $$(".cb-slot").forEach(function(b){b.setAttribute("aria-pressed","false")});
+      btn.setAttribute("aria-pressed","true");
+      var alt=conflictAlts[ai];
+      if($("#cb-date"))$("#cb-date").value=alt.date;
+      if($("#cb-time"))$("#cb-time").value=alt.time;
+      acceptConflictTime(alt.date,alt.time,len);
+    };
+  });
+  var apply=$("#cb-apply-custom");
+  if(apply)apply.onclick=function(){
+    var date=$("#cb-date").value;
+    var time=$("#cb-time").value;
+    if(!date||!time){toast("Choose a date and time");return}
+    $$(".cb-slot").forEach(function(b){b.setAttribute("aria-pressed","false")});
+    selectedConflictAlt=-1;
+    acceptConflictTime(date,time,len);
+  };
+}
+
+function acceptConflictTime(date,time,len){
+  if(conflictHomeIndex<0||!homes[conflictHomeIndex])return;
+  var h=homes[conflictHomeIndex];
+  h.date=date;
+  h.time=time;
+  h.state="held";
+  h.agent=h.agent||"Dana Whitfield";
+  var block=document.querySelector(".conflict-block");
+  var prow=document.getElementById("conflict-prow");
+  if(prow){
+    prow.classList.add("ok");
+    var chip=prow.querySelector(".chip-conflict");
+    if(chip)chip.outerHTML='<span class="chip chip-held chip-sm"><svg aria-hidden="true"><use href="#s-check"/></svg>Available</span>';
+  }
+  if(block){
+    block.innerHTML='<div class="callout callout-ok" style="margin:0"><svg aria-hidden="true"><use href="#s-checkcircle"/></svg><span><b>Conflict resolved.</b> Showing set for '+fmtDate(date)+', '+fmtTime(time)+' to '+fmtTime(addMin(time,len||winLen()))+'. You can confirm the booking.</span></div>';
+  }
+  scenario="success";
+  toast("Showing time updated for "+h.addr);
+  renderHomes();
 }
 
 window.resolveConflict=function(choice){
   var msg="";
   if(choice==="client"){msg="Richard Frank will be contacted about the new time.";
-    document.querySelector(".conflict-block").innerHTML='<div class="callout callout-info"><svg aria-hidden="true"><use href="#s-mail"/></svg><span><b>Contacting client.</b> Richard Frank will be asked if the next available time works. The other homes are held in the meantime.</span></div>'}
+    document.querySelector(".conflict-block").innerHTML='<div class="callout callout-info"><svg aria-hidden="true"><use href="#s-mail"/></svg><span><b>Contacting client.</b> Richard Frank will be asked if one of the available times works. The other homes are held in the meantime.</span></div>'}
   else if(choice==="listing"){msg="Listing agent will be contacted.";
-    document.querySelector(".conflict-block").innerHTML='<div class="callout callout-info"><svg aria-hidden="true"><use href="#s-phone"/></svg><span><b>Contacting listing agent.</b> Following up with the listing agent about the requested window. The other homes are held in the meantime.</span></div>'}
+    document.querySelector(".conflict-block").innerHTML='<div class="callout callout-info"><svg aria-hidden="true"><use href="#s-phone"/></svg><span><b>Contacting listing agent.</b> Following up about the requested window. The other homes are held in the meantime.</span></div>'}
   else{msg="Home skipped.";
     document.querySelector(".conflict-block").innerHTML='<div class="callout" style="background:var(--grey-soft);color:var(--text-2)"><svg aria-hidden="true"><use href="#s-x"/></svg><span><b>Skipped.</b> This home will be removed from the booking confirmation.</span></div>'}
   toast(msg)
@@ -1523,8 +1627,9 @@ function applyBookingToHomes(){
   var slots=buildSlots(t);
   homes.forEach(function(h,i){
     h.date=h.date||"2022-06-18";
-    h.time=slots[i].time;
-    h.agent="Dana Whitfield";
+    // Keep a conflict-resolved time if ops already picked one
+    if(!(h.time&&h.state==="held"))h.time=slots[i].time;
+    h.agent=h.agent||"Dana Whitfield";
     h.listing=h.listing||LISTING_AGENTS[i%LISTING_AGENTS.length];
     h.state="held";
   });
@@ -1543,12 +1648,14 @@ function applyBookingToHomes(){
 
 function confirmBooking(){
   applyBookingToHomes();
+  statusUserSet=true;
   setReqScheduled();
   mstep=4;setMS(4);hideBookPanes();$("#bm-send").hidden=false;
   $("#bm-skip").classList.remove("hidden");
   $("#bm-next").textContent="Send itinerary";
   $("#bm-next").disabled=false;
-  toast(homes.length+" homes booked");
+  if(scenario==="success")toastScheduledSuccess();
+  else toast(homes.length+" homes booked — resolve conflicts to finish");
 }
 
 function markItinerarySent(){
@@ -1578,12 +1685,15 @@ function finishScheduler(sent){
   if(sent){
     $("#bm-done-title").textContent="Itinerary sent";
     $("#bm-done-msg").textContent="Richard Frank has the confirmed schedule. Melinda Liu was copied on the email.";
+    toast("Itinerary sent to Richard Frank");
   }else{
+    statusUserSet=true;
     setReqScheduled();
     $("#bm-done-title").textContent="Booking confirmed";
     $("#bm-done-msg").textContent="Showing windows are held. You can send the itinerary whenever you're ready.";
+    if(scenario==="success")toastScheduledSuccess();
+    else toast("Booking confirmed");
   }
-  toast(sent?"Itinerary sent to Richard Frank":"Booking confirmed");
 }
 
 $("#btn-send").onclick=function(){sendItinerary(false)};
@@ -1678,7 +1788,7 @@ function resetExperience(opts){
   $("#auto-status").innerHTML='<i aria-hidden="true"></i>Ready to schedule';
   $("#book-label").innerHTML='Schedule <span id="book-n">'+homes.length+'</span> homes';
   $("#auto-h").innerHTML='Schedule <span id="auto-n">'+homes.length+'</span> homes for Sat, Jun 18';
-  $("#bm-optimize").checked=true;
+  $("#bm-optimize").value="yes";
   $("#bm-start").value="14:00";
   showPane(true);
   if(expMode==="before"||expMode==="after"){
@@ -1743,7 +1853,33 @@ $$(".demobar button").forEach(function(b){b.onclick=function(){
 }});
 
 var toastTimer;
-function toast(m){$("#toast-text").textContent=m;$("#toast").classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(function(){$("#toast").classList.remove("show")},2600)}
+function toast(m,opts){
+  opts=opts||{};
+  var el=$("#toast-text");
+  if(opts.html)el.innerHTML=m;else el.textContent=m;
+  $("#toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){$("#toast").classList.remove("show")},opts.duration||2600);
+}
+function toastScheduledSuccess(){
+  statusUserSet=true;
+  setReqScheduled();
+  toast(homes.length+' homes are scheduled. <a href="#" id="toast-next">Go to next request</a>',{html:true,duration:9000});
+  var link=$("#toast-next");
+  if(link)link.onclick=function(e){e.preventDefault();goToNextRequest()};
+}
+function goToNextRequest(){
+  $("#toast").classList.remove("show");
+  if(!$("#book-modal").hidden)closeModal();
+  qstate.view="unscheduled";
+  qstate.assignee="all";
+  qstate.page=1;
+  if($("#view"))$("#view").value="unscheduled";
+  if($("#assignee-filter"))$("#assignee-filter").value="all";
+  renderQueue();
+  showScreen("queue");
+  toast("Pick the next unscheduled request from the queue");
+}
 
 document.body.className="mode-chooser";
 $("#screen-chooser").hidden=false;
