@@ -1669,9 +1669,7 @@ function confirmBooking(){
 function markItinerarySent(){
   itinerarySent=true;
   statusUserSet=true;
-  if(expMode==="before")setReqStatus("Scheduled");
-  else setReqStatus("Awaiting client");
-  syncDetailTourStatus(reqStatus);
+  setReqScheduled();
   $("#ab-text").textContent="Itinerary sent to Richard Frank and copied to Melinda Liu.";
   $("#btn-send").disabled=true;
   addEvent("Itinerary sent to client","Emailed to Richard Frank, copied to Melinda Liu","06/16/22, 1:44 PM",null,"success");
@@ -1690,13 +1688,13 @@ function finishScheduler(sent){
   $("#bm-cancel").classList.add("hidden");
   $("#bm-next").textContent="Done";
   $("#bm-next").disabled=false;
+  statusUserSet=true;
+  setReqScheduled();
   if(sent){
     $("#bm-done-title").textContent="Itinerary sent";
     $("#bm-done-msg").textContent="Richard Frank has the confirmed schedule. Melinda Liu was copied on the email.";
     toast("Itinerary sent to Richard Frank");
   }else{
-    statusUserSet=true;
-    setReqScheduled();
     $("#bm-done-title").textContent="Booking confirmed";
     $("#bm-done-msg").textContent="Showing windows are held. You can send the itinerary whenever you're ready.";
     if(scenario==="success")toastScheduledSuccess();
