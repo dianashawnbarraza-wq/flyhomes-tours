@@ -171,6 +171,28 @@ tr.is-new td.c-client{font-weight:500}
 .dh-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
 .dh-actions .menu-wrap .menu{min-width:168px}
 
+/* assignment */
+.assignbar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.assignbar.unassigned{background:var(--amber-soft);border-color:var(--amber-line)}
+.assignbar .as-label{font-size:12px;font-weight:500;color:var(--text-2);margin-right:2px}
+.assignbar .as-who{display:flex;align-items:center;gap:8px;min-width:0}
+.assignbar .as-name{font-size:14px;font-weight:500;color:var(--text)}
+.assignbar .as-meta{font-size:12px;color:var(--text-2)}
+.assignbar .as-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.assign-dd{position:relative}
+.assign-dd-btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px 0 8px;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);font-size:13px;font-weight:500;color:var(--text);cursor:pointer}
+.assign-dd-btn:hover{background:var(--canvas);border-color:var(--line-strong)}
+.assign-dd-btn .status-caret{width:14px;height:14px;color:var(--text-3)}
+.assign-dd-menu{position:absolute;right:0;top:calc(100% + 4px);min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh2);padding:4px;z-index:30;display:none}
+.assign-dd-menu.open{display:block}
+.assign-dd-menu button{display:flex;align-items:center;gap:10px;width:100%;height:40px;padding:0 10px;border:0;background:transparent;border-radius:var(--r);font-size:13px;color:var(--text);cursor:pointer;text-align:left}
+.assign-dd-menu button:hover{background:var(--canvas)}
+.assign-dd-menu button[aria-checked="true"]{background:var(--blue-soft);color:var(--blue);font-weight:500}
+.assign-dd-menu .as-unassign{color:var(--text-2);border-top:1px solid var(--line);margin-top:4px;padding-top:4px;border-radius:0 0 var(--r) var(--r)}
+.assignee-cell{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)}
+.assignee-cell .avatar{width:20px;height:20px;font-size:9px}
+.assignee-cell.mine{color:var(--text);font-weight:500}
+
 /* agent bar */
 .agentbar{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
 .agentbar .ab-id{display:flex;align-items:center;gap:12px;min-width:200px}
@@ -543,6 +565,7 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
     </div>
     <div class="toolbar">
       <div class="field view-field"><label for="view">View</label><select class="select" id="view"><option value="unscheduled" selected>Unscheduled</option><option value="priority">Offer deadline approaching</option><option value="awaiting">Awaiting client</option><option value="today">Tours today</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="canceled">Canceled</option><option value="all">All tours</option></select></div>
+      <div class="field"><label for="assignee-filter">Assignee</label><select class="select" id="assignee-filter"><option value="all" selected>All assignees</option><option value="me">Assigned to me</option><option value="unassigned">Unassigned</option></select></div>
       <div class="toolbar-right">
         <div class="field search-field"><label for="q">Search tours</label><svg aria-hidden="true"><use href="#s-search"/></svg><input class="input" id="q" type="search" placeholder="Client or tour ID" autocomplete="off"></div>
         <div class="field"><label for="office">Office</label><select class="select" id="office"><option>All offices</option><option selected>Puget Sound</option><option>Bay Area</option><option>Boston</option></select></div>
@@ -550,7 +573,7 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
       </div>
     </div>
     <div class="tablewrap"><table><caption class="sr-only">Tour requests</caption><thead><tr>
-      <th><span class="sr-only">Unopened</span></th><th>Client name</th><th>Status</th><th>Tour date and time</th><th>Homes requested</th><th>Tour agent</th><th>Requested by</th><th>Requested on</th><th>Office</th>
+      <th><span class="sr-only">Unopened</span></th><th>Client name</th><th>Status</th><th>Assigned to</th><th>Tour date and time</th><th>Homes requested</th><th>Tour agent</th><th>Requested by</th><th>Requested on</th><th>Office</th>
     </tr></thead><tbody id="tours-body"></tbody></table>
     <div class="tfoot"><span style="font-size:13px;color:var(--text-2)" id="rowcount"></span><nav class="pager" aria-label="Pagination" id="pager"></nav></div></div>
   </div>
@@ -600,6 +623,12 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
         <span>Last activity: <span id="last-activity" style="color:var(--text)">None</span></span>
       </div>
     </div>
+
+    <section class="assignbar" id="assignbar" aria-label="Request owner">
+      <span class="as-label">Assigned to</span>
+      <div class="as-who" id="assign-who"></div>
+      <div class="as-actions" id="assign-actions"></div>
+    </section>
 
     <section class="agentbar" aria-label="Buyer's agent">
       <div class="ab-id">
@@ -782,6 +811,22 @@ body.mode-before .scope,body.mode-before .autostrip,body.mode-before .demobar [d
   </div>
 </div>
 
+<!-- ============ TAKE ASSIGNMENT CONFIRM ============ -->
+<div class="scrim" id="claim-modal" hidden>
+  <div class="modal warn-modal" role="dialog" aria-modal="true" aria-labelledby="cm-title" style="max-width:440px">
+    <div class="modal-head"><div><h2 id="cm-title">Assign this request to you?</h2><p id="cm-sub">You’ll become the owner for scheduling and follow-up.</p></div><button class="btn btn-icon btn-ghost mh-close" id="cm-close" aria-label="Close"><svg aria-hidden="true"><use href="#s-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="callout callout-info"><svg aria-hidden="true"><use href="#s-user"/></svg><span id="cm-msg">Assign Tour request #2214 to Michelle Williams.</span></div>
+    </div>
+    <div class="modal-foot">
+      <div class="mf-right" style="margin-left:0;width:100%;justify-content:flex-end">
+        <button class="btn" id="cm-cancel">Keep browsing</button>
+        <button class="btn btn-primary" id="cm-confirm">Assign to me</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ DATE CHANGE WARNING ============ -->
 <div class="scrim" id="warn-modal" hidden>
   <div class="modal warn-modal" role="dialog" aria-modal="true" aria-labelledby="wm-title" style="max-width:480px">
@@ -824,7 +869,19 @@ var THUMBS=[
 var expMode="chooser"; // chooser | before | after
 var TOURS=[];
 var NAMES=["Richard Frank","Mary Liu","James Richards","Chris Johnson","Laura Lay","Olivia Benson","Danny Guerrero","Laura Holloway","Earnest Green","Holly Pollard","Priya Raman","Theo Vance","Grace Okonkwo","Ben Alvarez","Nina Sokolov","Marcus Bell","Yuki Tanaka","Rosa Delgado","Owen Pritchard","Amara Nwosu","Dylan Brooks","Sofia Marchetti","Kevin Osei","Hannah Reyes","Tom Blackwood","Aisha Karim","Peter Lindqvist","Denise Wu","Andre Fontaine","Bianca Moreno","Colin Hayes","Fatima Ali"];
-var STATUS_IC={},STATUS_CLS={},qstate={view:"all",q:"",sort:"received",page:1,per:12};
+var CURRENT_USER={id:"michelle",name:"Michelle Williams",initials:"MW",color:"b1"};
+var OPS_USERS=[
+  CURRENT_USER,
+  {id:"earnest",name:"Earnest Monet",initials:"EM",color:"b2"},
+  {id:"priya",name:"Priya Shah",initials:"PS",color:"b3"},
+  {id:"jordan",name:"Jordan Blake",initials:"JB",color:"b4"}
+];
+var DETAIL_TOUR_ID=2214;
+var pendingClaim=null;
+var STATUS_IC={},STATUS_CLS={},qstate={view:"all",assignee:"all",q:"",sort:"received",page:1,per:12};
+
+function opsById(id){for(var i=0;i<OPS_USERS.length;i++)if(OPS_USERS[i].id===id)return OPS_USERS[i];return null}
+function detailTour(){for(var i=0;i<TOURS.length;i++)if(TOURS[i].id===DETAIL_TOUR_ID)return TOURS[i];return null}
 
 function buildTours(){
   TOURS=[];
@@ -833,11 +890,12 @@ function buildTours(){
     STATUS_CLS={"Unscheduled":"unscheduled","Scheduled":"scheduled","In Progress":"progress","Completed":"completed","Canceled":"canceled"};
     NAMES.forEach(function(n,i){
       var day=18+Math.floor(i/6);var hr=9+((i*2)%8);var rday=16-Math.floor(i/5);
-      TOURS.push({id:2214-i,client:n,status:"Unscheduled",date:"06/"+day+"/22, "+hr+":00 "+(hr>=12?"PM":"AM"),homes:i===0?3:2+(i%5),req:"06/"+rday+"/22, "+(1+(i%11))+":"+("0"+(i*7%60)).slice(-2)+" PM",isNew:true,priority:false,offerDue:null,today:day===18});
+      TOURS.push({id:2214-i,client:n,status:"Unscheduled",date:"06/"+day+"/22, "+hr+":00 "+(hr>=12?"PM":"AM"),homes:i===0?3:2+(i%5),req:"06/"+rday+"/22, "+(1+(i%11))+":"+("0"+(i*7%60)).slice(-2)+" PM",isNew:true,priority:false,offerDue:null,today:day===18,assignee:null});
     });
     ["Gerald Simms","Wendy Chao","Ellis Grant","Nadia Petrov","Sam Whitfield","Ivan Petrov","Meredith Cole","Paul Osei","Renee Duval"].forEach(function(n,i){
       var st=i<2?"Scheduled":i<4?"In Progress":i<7?"Completed":"Canceled";
-      TOURS.push({id:2180-i,client:n,status:st,date:"06/"+(18+i%3)+"/22, "+(9+i)+":00 AM",homes:2+(i%3),agent:["Dana Whitfield","Marcus Lee","Sammi Okafor"][i%3],req:"06/"+(12-i%4)+"/22, 2:00 PM",isNew:false,priority:false,offerDue:null,today:i%2===0});
+      var owner=OPS_USERS[i%OPS_USERS.length];
+      TOURS.push({id:2180-i,client:n,status:st,date:"06/"+(18+i%3)+"/22, "+(9+i)+":00 AM",homes:2+(i%3),agent:["Dana Whitfield","Marcus Lee","Sammi Okafor"][i%3],req:"06/"+(12-i%4)+"/22, 2:00 PM",isNew:false,priority:false,offerDue:null,today:i%2===0,assignee:owner.id});
     });
   }else{
     STATUS_IC={"Unscheduled":null,"Scheduled":"#s-checkcircle","Awaiting client":"#s-clock","Completed":"#s-check","Canceled":"#s-x"};
@@ -845,10 +903,11 @@ function buildTours(){
     NAMES.forEach(function(n,i){
       var day=18+Math.floor(i/6);var hr=9+((i*2)%8);var rday=16-Math.floor(i/5);
       var isPri=i%5===0||i===1;
-      TOURS.push({id:2214-i,client:n,status:"Unscheduled",date:"06/"+day+"/22, "+hr+":00 "+(hr>=12?"PM":"AM"),homes:i===0?3:2+(i%5),req:"06/"+rday+"/22, "+(1+(i%11))+":"+("0"+(i*7%60)).slice(-2)+" PM",isNew:i<3,priority:isPri,offerDue:isPri?("06/"+(20+(i%5))):null,today:day===18});
+      TOURS.push({id:2214-i,client:n,status:"Unscheduled",date:"06/"+day+"/22, "+hr+":00 "+(hr>=12?"PM":"AM"),homes:i===0?3:2+(i%5),req:"06/"+rday+"/22, "+(1+(i%11))+":"+("0"+(i*7%60)).slice(-2)+" PM",isNew:i<3,priority:isPri,offerDue:isPri?("06/"+(20+(i%5))):null,today:day===18,assignee:null});
     });
     ["Gerald Simms","Wendy Chao","Ellis Grant","Nadia Petrov","Sam Whitfield","Ivan Petrov","Meredith Cole","Paul Osei","Renee Duval"].forEach(function(n,i){
-      TOURS.push({id:2180-i,client:n,status:i<3?"Awaiting client":i<5?"Scheduled":i<7?"Completed":"Canceled",date:"06/"+(18+i%3)+"/22, "+(9+i)+":00 AM",homes:2+(i%3),agent:["Dana Whitfield","Marcus Lee","Sammi Okafor"][i%3],req:"06/"+(12-i%4)+"/22, 2:00 PM",isNew:false,priority:false,offerDue:null,today:i%2===0});
+      var owner=OPS_USERS[(i+1)%OPS_USERS.length];
+      TOURS.push({id:2180-i,client:n,status:i<3?"Awaiting client":i<5?"Scheduled":i<7?"Completed":"Canceled",date:"06/"+(18+i%3)+"/22, "+(9+i)+":00 AM",homes:2+(i%3),agent:["Dana Whitfield","Marcus Lee","Sammi Okafor"][i%3],req:"06/"+(12-i%4)+"/22, 2:00 PM",isNew:false,priority:false,offerDue:null,today:i%2===0,assignee:owner.id});
     });
   }
 }
@@ -877,11 +936,19 @@ function inView(t){
 function filtered(){
   var rows=TOURS.filter(function(t){
     if(!inView(t))return false;
+    if(qstate.assignee==="me"&&t.assignee!==CURRENT_USER.id)return false;
+    if(qstate.assignee==="unassigned"&&t.assignee)return false;
     if(qstate.q&&(t.client+" "+t.id).toLowerCase().indexOf(qstate.q.toLowerCase())===-1)return false;
     return true;
   });
   if(qstate.sort==="client")rows.sort(function(a,b){return a.client.localeCompare(b.client)});
   return rows;
+}
+function assigneeCellHtml(t){
+  if(!t.assignee)return'<span class="blank">Unassigned</span>';
+  var u=opsById(t.assignee);if(!u)return'<span class="blank">Unassigned</span>';
+  var mine=u.id===CURRENT_USER.id?' mine':'';
+  return'<span class="assignee-cell'+mine+'"><span class="avatar '+u.color+'" aria-hidden="true">'+u.initials+'</span>'+(mine?'Me':u.name)+'</span>';
 }
 function renderQueue(){
   if(expMode==="after"){
@@ -892,21 +959,22 @@ function renderQueue(){
     $$(".card-stat").forEach(function(b){b.setAttribute("aria-pressed",String(b.dataset.view===qstate.view))});
   }
   $("#view").value=qstate.view;
+  $("#assignee-filter").value=qstate.assignee;
   var rows=filtered(),pages=Math.max(1,Math.ceil(rows.length/qstate.per));
   if(qstate.page>pages)qstate.page=1;
   var s=(qstate.page-1)*qstate.per,slice=rows.slice(s,s+qstate.per);
   var body=$("#tours-body");body.innerHTML="";
-  if(!rows.length){body.innerHTML='<tr><td colspan="9"><div class="empty">No tour requests in this view.</div></td></tr>';$("#rowcount").textContent="No requests";$("#pager").innerHTML="";return;}
+  if(!rows.length){body.innerHTML='<tr><td colspan="10"><div class="empty">No tour requests in this view.</div></td></tr>';$("#rowcount").textContent="No requests";$("#pager").innerHTML="";return;}
   slice.forEach(function(t){
-    var unread=t.status==="Unscheduled";
+    var unread=t.status==="Unscheduled"&&!t.assignee;
     var tr=document.createElement("tr");tr.tabIndex=0;if(unread)tr.className="is-new";
     var ic=STATUS_IC[t.status];
     var cls=STATUS_CLS[t.status]||"completed";
     var statusChip='<span class="chip chip-'+cls+'">'+(ic?'<svg aria-hidden="true"><use href="'+ic+'"/></svg>':'')+t.status+'</span>';
     var pri=expMode==="after"&&t.priority?'<span class="chip chip-priority chip-sm">Offer due '+t.offerDue+'</span>':'';
-    tr.innerHTML='<td class="c-flag">'+(unread?'<span class="sr-only">Unopened</span>':'')+'</td><td class="c-client"><span class="client-cell">'+t.client+pri+'</span></td><td>'+statusChip+'</td><td>'+t.date+'</td><td>'+t.homes+'</td><td>'+(t.agent||'<span class="blank">-</span>')+'</td><td>Client</td><td>'+t.req+'</td><td>Puget Sound</td>';
-    tr.onclick=function(){showScreen("detail")};
-    tr.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();showScreen("detail")}};
+    tr.innerHTML='<td class="c-flag">'+(unread?'<span class="sr-only">Unopened</span>':'')+'</td><td class="c-client"><span class="client-cell">'+t.client+pri+'</span></td><td>'+statusChip+'</td><td>'+assigneeCellHtml(t)+'</td><td>'+t.date+'</td><td>'+t.homes+'</td><td>'+(t.agent||'<span class="blank">-</span>')+'</td><td>Client</td><td>'+t.req+'</td><td>Puget Sound</td>';
+    tr.onclick=function(){openTourDetail(t.id)};
+    tr.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();openTourDetail(t.id)}};
     body.appendChild(tr);
   });
   $("#rowcount").textContent="Showing "+(s+1)+" to "+(s+slice.length)+" of "+rows.length+" requests";
@@ -918,6 +986,7 @@ function renderQueue(){
 }
 $$(".card-stat").forEach(function(b){b.onclick=function(){qstate.view=b.dataset.view;qstate.page=1;renderQueue()}});
 $("#view").onchange=function(e){qstate.view=e.target.value;qstate.page=1;renderQueue()};
+$("#assignee-filter").onchange=function(e){qstate.assignee=e.target.value;qstate.page=1;renderQueue()};
 $("#q").oninput=function(e){qstate.q=e.target.value;qstate.page=1;renderQueue()};
 $("#sort").onchange=function(e){qstate.sort=e.target.value;renderQueue()};
 
@@ -1517,6 +1586,115 @@ function finishScheduler(sent){
 
 $("#btn-send").onclick=function(){sendItinerary(false)};
 
+/* assignment */
+function closeAssignMenu(){var m=$("#assign-menu");if(m)m.classList.remove("open");var b=$("#assign-dd-btn");if(b)b.setAttribute("aria-expanded","false")}
+function closeClaimModal(){$("#claim-modal").hidden=true;pendingClaim=null}
+function openClaimModal(opts){
+  opts=opts||{};
+  pendingClaim={tourId:opts.tourId||DETAIL_TOUR_ID,fromOther:!!opts.fromOther};
+  var other=opts.otherName||"another ops teammate";
+  $("#cm-title").textContent=opts.fromOther?"Take over this request?":"Assign this request to you?";
+  $("#cm-sub").textContent=opts.fromOther
+    ?("It’s currently assigned to "+other+". You’ll become the owner for scheduling and follow-up.")
+    :"You’ll become the owner for scheduling and follow-up.";
+  $("#cm-msg").textContent="Assign Tour request #"+pendingClaim.tourId+" to "+CURRENT_USER.name+".";
+  $("#cm-confirm").textContent=opts.fromOther?"Assign to me":"Assign to me";
+  $("#claim-modal").hidden=false;
+}
+function setAssignee(userId,opts){
+  opts=opts||{};
+  var t=detailTour();if(!t)return;
+  var prev=t.assignee?opsById(t.assignee):null;
+  t.assignee=userId||null;
+  var next=userId?opsById(userId):null;
+  if(!opts.silent){
+    if(!next)addEvent("Unassigned","Request returned to the unassigned queue","06/16/22, 1:46 PM");
+    else if(prev&&prev.id!==next.id)addEvent("Reassigned","From "+prev.name+" to "+next.name,"06/16/22, 1:46 PM");
+    else addEvent("Assigned to "+(next.id===CURRENT_USER.id?"me":next.name),next.name+" is handling this request","06/16/22, 1:46 PM");
+    toast(next?(next.id===CURRENT_USER.id?"Assigned to you":"Assigned to "+next.name):"Request unassigned");
+  }
+  renderAssignBar();
+  renderQueue();
+}
+function requestAssignToMe(){
+  var t=detailTour();if(!t)return;
+  if(t.assignee===CURRENT_USER.id){toast("Already assigned to you");return}
+  if(t.assignee){
+    var other=opsById(t.assignee);
+    openClaimModal({tourId:t.id,fromOther:true,otherName:other?other.name:"another ops teammate"});
+    return;
+  }
+  // Unassigned: one-click claim, no modal
+  setAssignee(CURRENT_USER.id);
+}
+function renderAssignBar(){
+  var t=detailTour();if(!t)return;
+  var bar=$("#assignbar");
+  var who=$("#assign-who");
+  var actions=$("#assign-actions");
+  var u=t.assignee?opsById(t.assignee):null;
+  var mine=u&&u.id===CURRENT_USER.id;
+  bar.classList.toggle("unassigned",!u);
+  if(!u){
+    who.innerHTML='<div><div class="as-name">Unassigned</div><div class="as-meta">Assign yourself to take ownership before scheduling</div></div>';
+    actions.innerHTML='<button type="button" class="btn btn-primary" id="btn-assign-me"><svg aria-hidden="true"><use href="#s-user"/></svg>Assign to me</button>';
+    $("#btn-assign-me").onclick=function(){requestAssignToMe()};
+    return;
+  }
+  who.innerHTML='<span class="avatar '+(mine?"b1":u.color)+'" aria-hidden="true">'+u.initials+'</span><div><div class="as-name">'+(mine?"Me · "+u.name:u.name)+'</div><div class="as-meta">'+(mine?"You’re handling this request":"Currently owned by a teammate")+'</div></div>';
+  var menu=OPS_USERS.map(function(op){
+    return'<button type="button" role="option" data-ops="'+op.id+'" aria-checked="'+(op.id===u.id?"true":"false")+'"><span class="avatar '+op.color+'" aria-hidden="true">'+op.initials+'</span>'+op.name+(op.id===CURRENT_USER.id?" (me)":"")+'</button>';
+  }).join("");
+  actions.innerHTML=
+    (!mine?'<button type="button" class="btn" id="btn-assign-me">Assign to me</button>':'')+
+    '<div class="assign-dd">'+
+      '<button type="button" class="assign-dd-btn" id="assign-dd-btn" aria-haspopup="listbox" aria-expanded="false">'+
+        '<span class="avatar sm '+u.color+'" aria-hidden="true">'+u.initials+'</span>Reassign'+
+        '<svg class="status-caret" aria-hidden="true"><use href="#s-caret"/></svg>'+
+      '</button>'+
+      '<div class="assign-dd-menu" id="assign-menu" role="listbox" aria-label="Reassign request">'+menu+
+        '<button type="button" class="as-unassign" data-ops="">Unassign</button>'+
+      '</div>'+
+    '</div>';
+  if($("#btn-assign-me"))$("#btn-assign-me").onclick=function(){requestAssignToMe()};
+  $("#assign-dd-btn").onclick=function(e){
+    e.stopPropagation();
+    var open=$("#assign-menu").classList.toggle("open");
+    $("#assign-dd-btn").setAttribute("aria-expanded",String(open));
+  };
+  $$("#assign-menu [data-ops]").forEach(function(btn){
+    btn.onclick=function(e){
+      e.stopPropagation();
+      closeAssignMenu();
+      var id=btn.getAttribute("data-ops")||null;
+      if(id===CURRENT_USER.id&&t.assignee&&t.assignee!==CURRENT_USER.id){
+        var other=opsById(t.assignee);
+        openClaimModal({tourId:t.id,fromOther:true,otherName:other?other.name:"another ops teammate"});
+        return;
+      }
+      setAssignee(id||null);
+    };
+  });
+}
+function openTourDetail(tourId){
+  // Prototype detail is always Richard Frank; sync assignee from that request.
+  // Opening other rows still enters the same detail canvas for the demo.
+  if(tourId&&tourId!==DETAIL_TOUR_ID){
+    // Keep browsing fluid — no force-claim on click.
+  }
+  showScreen("detail");
+  renderAssignBar();
+}
+$("#cm-close").onclick=closeClaimModal;
+$("#cm-cancel").onclick=closeClaimModal;
+$("#cm-confirm").onclick=function(){
+  if(!pendingClaim)return;
+  setAssignee(CURRENT_USER.id);
+  closeClaimModal();
+};
+$("#claim-modal").addEventListener("click",function(e){if(e.target===$("#claim-modal"))closeClaimModal()});
+document.addEventListener("click",function(){closeAssignMenu()});
+
 /* reset experience */
 function resetExperience(opts){
   opts=opts||{};
@@ -1524,13 +1702,15 @@ function resetExperience(opts){
   closeEditModal();
   closeTourModal();
   closeWarnModal();
+  closeClaimModal();
+  closeAssignMenu();
   $("#book-modal").hidden=true;
   homes=JSON.parse(JSON.stringify(BASE_HOMES));
   timeline=TIMELINE_BASE.slice();
   booked=false;itinerarySent=false;statusUserSet=false;lastRunAt=null;mstep=1;scenario="success";pendingEdit=null;reqStatus="Unscheduled";
   tourReq={date:"2022-06-18",time:"14:00",office:"Puget Sound",note:""};
-  qstate={view:expMode==="before"?"all":"unscheduled",q:"",sort:"received",page:1,per:12};
-  $("#q").value="";$("#sort").value="received";
+  qstate={view:expMode==="before"?"all":"unscheduled",assignee:"all",q:"",sort:"received",page:1,per:12};
+  $("#q").value="";$("#sort").value="received";$("#assignee-filter").value="all";
   syncViewSelect();
   setReqStatus("Unscheduled",{selectable:false});
   $("#req-for").textContent="Requested for Saturday, June 18, 2022";
@@ -1549,7 +1729,7 @@ function resetExperience(opts){
   showPane(true);
   if(expMode==="before"||expMode==="after"){
     buildTours();
-    renderQueue();renderAll();
+    renderQueue();renderAll();renderAssignBar();
     showScreen("queue");
   }
   if(!opts.silent)toast("Reset to start")
@@ -1560,7 +1740,7 @@ function goToChooser(){
   document.body.className="mode-chooser";
   $("#screen-chooser").hidden=false;
   clearRunTimers();
-  closeEditModal();closeTourModal();closeWarnModal();
+  closeEditModal();closeTourModal();closeWarnModal();closeClaimModal();
   $("#book-modal").hidden=true;
   window.scrollTo(0,0);
 }
@@ -1581,6 +1761,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){
     e.preventDefault();
     if(expMode==="chooser")return;
+    if(!$("#claim-modal").hidden){closeClaimModal();return}
     if(!$("#warn-modal").hidden){$("#wm-cancel").click();return}
     if(!$("#edit-modal").hidden){closeEditModal();return}
     if(!$("#tour-modal").hidden){closeTourModal();return}
@@ -1594,6 +1775,7 @@ function showScreen(s){
   $("#screen-queue").hidden=s!=="queue";
   $("#screen-detail").hidden=s!=="detail";
   $$(".demobar button").forEach(function(b){b.classList.toggle("active",b.dataset.scene===s)});
+  if(s==="detail")renderAssignBar();
   if(s==="queue"||s==="detail")window.scrollTo(0,0)
 }
 $$("[data-back]").forEach(function(a){a.onclick=function(e){e.preventDefault();showScreen("queue")}});
@@ -1602,9 +1784,9 @@ $$("[data-back]").forEach(function(a){a.onclick=function(e){e.preventDefault();s
 $$(".demobar button").forEach(function(b){b.onclick=function(){
   var sc=b.dataset.scene;
   if(sc==="queue")showScreen("queue");
-  else if(sc==="detail"){showScreen("detail")}
-  else if(sc==="success"&&expMode==="after"){showScreen("detail");setTimeout(function(){openModal("success");mstep=1;$("#bm-next").click()},200)}
-  else if(sc==="conflict"&&expMode==="after"){showScreen("detail");setTimeout(function(){openModal("conflict");mstep=1;$("#bm-next").click()},200)}
+  else if(sc==="detail"){openTourDetail(DETAIL_TOUR_ID)}
+  else if(sc==="success"&&expMode==="after"){openTourDetail(DETAIL_TOUR_ID);setTimeout(function(){openModal("success");mstep=1;$("#bm-next").click()},200)}
+  else if(sc==="conflict"&&expMode==="after"){openTourDetail(DETAIL_TOUR_ID);setTimeout(function(){openModal("conflict");mstep=1;$("#bm-next").click()},200)}
 }});
 
 var toastTimer;
